@@ -15,12 +15,14 @@ st.set_page_config(
 # --------------------------------
 @st.cache_data
 def load_data():
+    # 相对路径，读取仓库根目录下的 CSV 文件
     df = pd.read_csv(
-        "/Users/randuan/Downloads/cleaned_digital_dealer_prepped.csv",
+        "cleaned_digital_dealer_prepped.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
     return df
 
+# ✅ 关键：真正把数据加载成 df
 df = load_data()
 
 st.title("📊 Digital Dealer Leads Dashboard")
