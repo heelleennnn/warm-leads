@@ -15,14 +15,12 @@ st.set_page_config(
 # --------------------------------
 @st.cache_data
 def load_data():
-    # 相对路径，读取仓库根目录下的 CSV 文件
     df = pd.read_csv(
         "cleaned_digital_dealer_prepped.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
     return df
 
-# ✅ 关键：真正把数据加载成 df
 df = load_data()
 
 st.title("📊 Digital Dealer Leads Dashboard")
@@ -44,7 +42,7 @@ if select_all_weeks:
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
-# ----- State filter -----
+# ----- State filter (uses 'State' column) -----
 states = sorted(df["State"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 if select_all_states:
@@ -100,7 +98,7 @@ if not filtered.empty:
         markers=True,
         title="Leads Over Time (Weekly)"
     )
-    st.plotly_chart(fig_week, use_container_width=True)
+    st.plotly_chart(fig_week, width="stretch")
 
     # Leads by Dealer
     dealer_counts = (
@@ -113,7 +111,7 @@ if not filtered.empty:
         y="Leads",
         title="Leads by Dealer"
     )
-    st.plotly_chart(fig_dealer, use_container_width=True)
+    st.plotly_chart(fig_dealer, width="stretch")
 
     # Leads by State
     state_counts = (
@@ -126,7 +124,7 @@ if not filtered.empty:
         y="Leads",
         title="Leads by State"
     )
-    st.plotly_chart(fig_state, use_container_width=True)
+    st.plotly_chart(fig_state, width="stretch")
 else:
     st.warning("No data for the selected filters.")
 
@@ -137,7 +135,7 @@ st.subheader("Filtered Lead Records")
 if not filtered.empty:
     st.dataframe(
         filtered.sort_values("Lead_Date", ascending=False),
-        use_container_width=True
+        width="stretch"
     )
 else:
     st.write("No rows match the current filters.")
