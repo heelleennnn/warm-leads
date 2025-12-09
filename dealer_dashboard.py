@@ -187,11 +187,4 @@ if not filtered.empty:
 
     st.plotly_chart(fig_state, use_container_width=True)
 
-    # ---------- Raw Data Table ----------
-    st.subheader("Filtered Leads")
-    st.dataframe(
-        filtered.sort_values("Lead_Date", ascending=False),
-        use_container_width=True
-    )
-else:
-    st.warning("No data for the selected filters.")
+
