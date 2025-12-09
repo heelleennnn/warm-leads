@@ -181,7 +181,11 @@ if not filtered.empty:
         height=CHART_HEIGHT
     )
     fig_week.update_traces(line_color="#324AB2", marker_color="#324AB2")
-    fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
+    fig_week.update_layout(
+        xaxis_title="State",
+        xaxis_tickangle=-45,
+        margin=dict(l=40, r=40, t=60, b=80)
+    )
     st.plotly_chart(fig_week, use_container_width=True)
 
     # ---------- 2. Individual Dealer ----------
@@ -246,7 +250,7 @@ if not filtered.empty:
     )
     fig_state.update_traces(marker_color="#76c7ff")
     fig_state.update_layout(
-        xaxis_title="Specific Dealers",
+        xaxis_title="State",
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
