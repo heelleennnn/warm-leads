@@ -29,8 +29,20 @@ def load_data():
 
 df = load_data()
 
+# Clean up Location text (strip spaces, normalise case, etc.)
+if "Location" in df.columns:
+    df["Location_clean"] = (
+        df["Location"]
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)  # collapse multiple spaces
+        .str.title()                            # "sydney cbd" -> "Sydney Cbd"
+    )
+else:
+    df["Location_clean"] = ""
+
 # --- Ensure required columns exist ---
-required_cols = ["Lead_Date", "Week_Start", "Dealer", "STATE"]
+required_cols = ["Lead_Date", "Week_Start", "Dealer", "STATE", "Location_clean"]
 missing = [c for c in required_cols if c not in df.columns]
 
 if missing:
@@ -41,7 +53,7 @@ if missing:
     )
     st.stop()
 
-# Sanity check – should show 2491 if full dataset
+# Sanity check – should show expected row count if full dataset
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -105,6 +117,39 @@ if select_all_states:
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
+# This temp df is only to generate the list of locations based on selected states
+if select_all_states:
+    df_for_locations = df
+else:
+    df_for_locations = df[df["STATE"].isin(selected_states)]
+
+# ----- Location filter (using Location_clean) -----
+all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
+
+# Search box to narrow down the location list
+location_search = st.sidebar.text_input("Search location")
+
+if location_search:
+    location_options = [
+        loc for loc in all_locations
+        if location_search.lower() in loc.lower()
+    ]
+else:
+    location_options = all_locations
+
+select_all_locations = st.sidebar.checkbox(
+    "Select All Locations (after state filter)", value=True
+)
+
+if select_all_locations:
+    selected_locations = location_options  # no further filter later
+else:
+    selected_locations = st.sidebar.multiselect(
+        "Select Location(s)",
+        location_options,
+        default=location_options
+    )
+
 # --------------------------------
 # APPLY FILTERS
 # --------------------------------
@@ -126,7 +171,42 @@ if not select_all_states:
     else:
         filtered = filtered.iloc[0:0]
 
+# Only filter by Location_clean if user actually narrowed locations
+if not select_all_locations:
+    if selected_locations:
+        filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
+    else:
+        filtered = filtered.iloc[0:0]
+
 st.caption(f"Rows after filters: {len(filtered)}")
+
+# ----- Sidebar bar chart: Leads by Location -----
+if not filtered.empty:
+    location_counts_sidebar = (
+        filtered
+        .groupby("Location_clean")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
+
+    fig_sidebar_loc = px.bar(
+        location_counts_sidebar.head(25),  # top 25 locations for readability
+        x="Location_clean",
+        y="Leads",
+        title="Leads by Location",
+        height=400
+    )
+    # Make bars a lighter shade of blue
+    fig_sidebar_loc.update_traces(marker_color="#8EC6FF")
+    fig_sidebar_loc.update_layout(
+        xaxis_tickangle=-45,
+        margin=dict(l=20, r=20, t=40, b=80)
+    )
+
+    st.sidebar.plotly_chart(fig_sidebar_loc, use_container_width=True)
+else:
+    st.sidebar.info("No data available for the selected filters to show location chart.")
 
 # --------------------------------
 # KPI ROW
