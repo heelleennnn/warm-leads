@@ -66,12 +66,12 @@ st.title("📊 Digital Dealer Leads Dashboard")
 # --------------------------------
 st.sidebar.header("Filters")
 
-# ----- Date range filter with presets (GLOBAL) -----
+# ----- Date range filter with presets -----
 min_date = df["Lead_Date"].min().date()
 max_date = df["Lead_Date"].max().date()
 
 date_mode = st.sidebar.radio(
-    "Date range (applies to all charts)",
+    "Date range",
     ["Custom range", "Last 7 days", "Last 30 days", "Last 90 days"],
     index=0
 )
@@ -108,36 +108,41 @@ else:
     # Show the resolved range for clarity
     st.sidebar.info(f"Showing {date_mode.lower()}:\n{start_date} → {end_date}")
 
-# ----- State filter (ONLY affects State graph) -----
+# ----- State filter (using STATE) -----
 states = sorted(df["STATE"].dropna().unique())
-select_all_states = st.sidebar.checkbox("Select All States (State graph only)", value=True)
+select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states
+    selected_states = states        # we will NOT filter by state later
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
-# ----- Location filter (ONLY affects Location graph) -----
-# We'll base location options on the date-filtered data later, but
-# we can still build from full df here and then intersect later if needed.
-all_locations_full = sorted(df["Location_clean"].dropna().unique())
+# This temp df is only to generate the list of locations based on selected states
+if select_all_states:
+    df_for_locations = df
+else:
+    df_for_locations = df[df["STATE"].isin(selected_states)]
 
-location_search = st.sidebar.text_input("Search location (Location graph only)")
+# ----- Location filter (using Location_clean) -----
+all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
+
+# Search box to narrow down the location list
+location_search = st.sidebar.text_input("Search location")
 
 if location_search:
     location_options = [
-        loc for loc in all_locations_full
+        loc for loc in all_locations
         if location_search.lower() in loc.lower()
     ]
 else:
-    location_options = all_locations_full
+    location_options = all_locations
 
 select_all_locations = st.sidebar.checkbox(
-    "Select All Locations (Location graph only)", value=True
+    "Select All Locations (after state filter)", value=True
 )
 
 if select_all_locations:
-    selected_locations = location_options
+    selected_locations = location_options  # no further filter later
 else:
     selected_locations = st.sidebar.multiselect(
         "Select Location(s)",
@@ -146,28 +151,46 @@ else:
     )
 
 # --------------------------------
-# APPLY GLOBAL FILTERS (DATE ONLY)
+# APPLY FILTERS
 # --------------------------------
-date_start_ts = pd.to_datetime(start_date)
-date_end_ts = pd.to_datetime(end_date)
+filtered = df.copy()
 
-date_filtered = df[
-    (df["Lead_Date"] >= date_start_ts) &
-    (df["Lead_Date"] <= date_end_ts)
-].copy()
+# Filter by Lead_Date using selected/preset range
+start_ts = pd.to_datetime(start_date)
+end_ts = pd.to_datetime(end_date)
 
-st.caption(f"Rows after date filter: {len(date_filtered)}")
+filtered = filtered[
+    (filtered["Lead_Date"] >= start_ts) &
+    (filtered["Lead_Date"] <= end_ts)
+]
+
+# Only filter by STATE if user actually narrowed states
+if not select_all_states:
+    if selected_states:
+        filtered = filtered[filtered["STATE"].isin(selected_states)]
+    else:
+        filtered = filtered.iloc[0:0]
+
+# Only filter by Location_clean if user actually narrowed locations
+if not select_all_locations:
+    if selected_locations:
+        filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
+    else:
+        filtered = filtered.iloc[0:0]
+
+st.caption(f"Rows after filters: {len(filtered)}")
 
 # --------------------------------
-# KPI ROW (based on date filter only)
+# KPI ROW
 # --------------------------------
-if not date_filtered.empty:
-    total_leads = len(date_filtered)
+if not filtered.empty:
+    total_leads = len(filtered)
+    # number of days in selected range that actually exist in filtered data
     date_span_days = (
-        date_filtered["Lead_Date"].max().date() - date_filtered["Lead_Date"].min().date()
+        filtered["Lead_Date"].max().date() - filtered["Lead_Date"].min().date()
     ).days + 1
     avg_leads_per_day = total_leads / date_span_days if date_span_days > 0 else 0
-    num_dealers = date_filtered["Dealer"].nunique()
+    num_dealers = filtered["Dealer"].nunique()
 else:
     total_leads = 0
     avg_leads_per_day = 0
@@ -189,10 +212,10 @@ st.markdown("---")
 # --------------------------------
 # MAIN CONTENT
 # --------------------------------
-if not date_filtered.empty:
+if not filtered.empty:
     # ---------- 1. Leads Over Time (Weekly) ----------
     weekly_counts = (
-        date_filtered
+        filtered
         .groupby("Week_Start")
         .size()
         .reset_index(name="Leads")
@@ -211,9 +234,9 @@ if not date_filtered.empty:
 
     st.plotly_chart(fig_week, use_container_width=True)
 
-    # ---------- 2. Individual Dealer (top 15, date filter only) ----------
+    # ---------- 2. Individual Dealer (top 15 dealers) ----------
     dealer_counts = (
-        date_filtered
+        filtered
         .groupby("Dealer")
         .size()
         .reset_index(name="Leads")
@@ -236,73 +259,49 @@ if not date_filtered.empty:
 
     st.plotly_chart(fig_dealer, use_container_width=True)
 
-    # ---------- 3. Specific Locations (Location graph, location filter only) ----------
-    # Base on date-filtered data
-    loc_df = date_filtered.copy()
+    # ---------- 3. Specific Locations (by Location_clean) ----------
+    location_counts = (
+        filtered
+        .groupby("Location_clean")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
 
-    # Apply location filter ONLY to this graph
-    if selected_locations:
-        loc_df = loc_df[loc_df["Location_clean"].isin(selected_locations)]
-    else:
-        loc_df = loc_df.iloc[0:0]
+    fig_location = px.bar(
+        location_counts.head(25),  # show top 25 locations for readability
+        x="Location_clean",
+        y="Leads",
+        title="Specific Locations",
+        height=CHART_HEIGHT
+    )
+    # Lighter shade of blue for bars
+    fig_location.update_traces(marker_color="#8EC6FF")
+    fig_location.update_layout(
+        xaxis_tickangle=-45,
+        margin=dict(l=40, r=40, t=60, b=80)
+    )
 
-    if not loc_df.empty:
-        location_counts = (
-            loc_df
-            .groupby("Location_clean")
-            .size()
-            .reset_index(name="Leads")
-            .sort_values("Leads", ascending=False)
-        )
+    st.plotly_chart(fig_location, use_container_width=True)
 
-        fig_location = px.bar(
-            location_counts.head(25),  # top 25 locations for readability
-            x="Location_clean",
-            y="Leads",
-            title="Specific Locations",
-            height=CHART_HEIGHT
-        )
-        # Lighter shade of blue for bars
-        fig_location.update_traces(marker_color="#8EC6FF")
-        fig_location.update_layout(
-            xaxis_tickangle=-45,
-            margin=dict(l=40, r=40, t=60, b=80)
-        )
+    # ---------- 4. Leads by State (STATE) ----------
+    state_counts = (
+        filtered
+        .groupby("STATE")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
 
-        st.plotly_chart(fig_location, use_container_width=True)
-    else:
-        st.info("No data available for the selected locations and date range.")
+    fig_state = px.bar(
+        state_counts,
+        x="STATE",
+        y="Leads",
+        title="Leads by State",
+        height=CHART_HEIGHT
+    )
+    fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
-    # ---------- 4. Leads by State (State graph, state filter only) ----------
-    state_df = date_filtered.copy()
-
-    # Apply state filter ONLY to this graph
-    if not select_all_states:
-        if selected_states:
-            state_df = state_df[state_df["STATE"].isin(selected_states)]
-        else:
-            state_df = state_df.iloc[0:0]
-
-    if not state_df.empty:
-        state_counts = (
-            state_df
-            .groupby("STATE")
-            .size()
-            .reset_index(name="Leads")
-            .sort_values("Leads", ascending=False)
-        )
-
-        fig_state = px.bar(
-            state_counts,
-            x="STATE",
-            y="Leads",
-            title="Leads by State",
-            height=CHART_HEIGHT
-        )
-        fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
-
-        st.plotly_chart(fig_state, use_container_width=True)
-    else:
-        st.info("No data available for the selected states and date range.")
+    st.plotly_chart(fig_state, use_container_width=True)
 else:
-    st.info("No data available for the selected date range.")
+    st.info("No data available for the selected filters.")
