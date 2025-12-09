@@ -124,30 +124,21 @@ else:
     df_for_locations = df[df["STATE"].isin(selected_states)]
 
 # ----- Location filter (using Location_clean) -----
+# NOTE: multiselect has built-in search, so we don't need a separate text_input.
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
-
-# Search box to narrow down the location list
-location_search = st.sidebar.text_input("Search location")
-
-if location_search:
-    location_options = [
-        loc for loc in all_locations
-        if location_search.lower() in loc.lower()
-    ]
-else:
-    location_options = all_locations
 
 select_all_locations = st.sidebar.checkbox(
     "Select All Locations (after state filter)", value=True
 )
 
 if select_all_locations:
-    selected_locations = location_options  # no further filter later
+    selected_locations = all_locations  # we will NOT filter by location later
 else:
     selected_locations = st.sidebar.multiselect(
         "Select Location(s)",
-        location_options,
-        default=location_options
+        all_locations,
+        default=all_locations,
+        key="location_multiselect"
     )
 
 # --------------------------------
@@ -230,6 +221,8 @@ if not filtered.empty:
         title="Leads Over Time (Weekly)",
         height=CHART_HEIGHT
     )
+    # Navy blue
+    fig_week.update_traces(line_color="#003f5c", marker_color="#003f5c")
     fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
     st.plotly_chart(fig_week, use_container_width=True)
@@ -250,8 +243,8 @@ if not filtered.empty:
         title="Individual Dealer",
         height=CHART_HEIGHT
     )
-    # Lighter shade of blue for bars
-    fig_dealer.update_traces(marker_color="#8EC6FF")
+    # Light blue
+    fig_dealer.update_traces(marker_color="#7ab8ff")
     fig_dealer.update_layout(
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
@@ -275,8 +268,8 @@ if not filtered.empty:
         title="Specific Locations",
         height=CHART_HEIGHT
     )
-    # Lighter shade of blue for bars
-    fig_location.update_traces(marker_color="#8EC6FF")
+    # Medium blue
+    fig_location.update_traces(marker_color="#2f76c6")
     fig_location.update_layout(
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
@@ -300,6 +293,8 @@ if not filtered.empty:
         title="Leads by State",
         height=CHART_HEIGHT
     )
+    # Sky blue
+    fig_state.update_traces(marker_color="#76c7ff")
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
     st.plotly_chart(fig_state, use_container_width=True)
