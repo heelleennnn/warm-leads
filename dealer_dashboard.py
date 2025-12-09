@@ -20,7 +20,7 @@ CHART_HEIGHT = 450  # all charts same height
 # --------------------------------
 def load_data():
     df = pd.read_csv(
-        "cleaned_digital_dealer_full.csv",
+        "cleaned_digital_dealer.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
     df = df.rename(columns={"Dealer/Website": "Dealer"})
@@ -48,12 +48,12 @@ if missing:
     st.error(f"Missing required columns: {missing}")
     st.stop()
 
-st.caption(f"Total rows in CSV: {len(df)}")
+
 
 # --------------------------------
 # TITLE
 # --------------------------------
-st.title("📊 Digital Dealer Leads Dashboard")
+st.title("Digital Dealer Leads Dashboard")
 
 # --------------------------------
 # SIDEBAR FILTERS
@@ -124,6 +124,23 @@ else:
         key="location_multiselect_main"
     )
     st.session_state.selected_locations = selected_locations
+# ----- Form filter -----
+if "Form" in df.columns:
+    forms = sorted(df["Form"].fillna("Unknown").unique())
+
+    select_all_forms = st.sidebar.checkbox("Select All Forms", value=True)
+
+    if select_all_forms:
+        selected_forms = forms
+    else:
+        selected_forms = st.sidebar.multiselect(
+            "Select Form(s)",
+            forms,
+            default=forms
+        )
+else:
+    selected_forms = None
+
 
 # --------------------------------
 # APPLY FILTERS
@@ -144,7 +161,7 @@ if not select_all_states:
 if not select_all_locations:
     filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
 
-st.caption(f"Rows after filters: {len(filtered)}")
+
 
 # --------------------------------
 # KPI ROW
@@ -265,6 +282,34 @@ if not filtered.empty:
         margin=dict(l=40, r=40, t=60, b=80)
     )
     st.plotly_chart(fig_state, use_container_width=True)
+
+    # ---------- 5. Leads by Form ----------
+    if "Form" in filtered.columns:
+        form_counts = (
+            filtered
+            .assign(Form_clean=filtered["Form"].fillna("Unknown"))
+            .groupby("Form_clean")
+            .size()
+            .reset_index(name="Leads")
+            .sort_values("Leads", ascending=False)
+        )
+
+        fig_form = px.bar(
+            form_counts.head(15),           # top 15 forms
+            x="Form_clean",
+            y="Leads",
+            title="Leads by Form Type",
+            height=CHART_HEIGHT
+        )
+        fig_form.update_traces(marker_color="#FF8C42")
+        fig_form.update_layout(
+            xaxis_title="Form",
+            xaxis_tickangle=-45,
+            margin=dict(l=40, r=40, t=60, b=80)
+        )
+        st.plotly_chart(fig_form, use_container_width=True)
+    else:
+        st.info("Column 'Form' not found in data; cannot plot Leads by Form.")
 
 else:
     st.info("No data available for selected filters.")
