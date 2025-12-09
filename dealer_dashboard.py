@@ -18,22 +18,13 @@ CHART_HEIGHT = 450  # all charts same height
 # --------------------------------
 # LOAD DATA
 # --------------------------------
-@st.cache_data
+# @st.cache_data   # comment this out while debugging
 def load_data():
     df = pd.read_csv(
         "cleaned_digital_dealer_full.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
-
-    # Rename columns so code is consistent
-    # Keep STATE as-is, since your column is really called STATE
-    df = df.rename(
-        columns={
-            "Dealer/Website": "Dealer"
-            # "STATE": "State"  # <-- removed to avoid mismatch
-        }
-    )
-
+    df = df.rename(columns={"Dealer/Website": "Dealer"})
     return df
 
 df = load_data()
