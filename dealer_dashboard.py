@@ -98,41 +98,21 @@ if select_all_states:
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
-# ----- Location filter with search + multi-select -----
-# First, restrict available locations by selected states (for usability)
+# ----- Location filter -----
 df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_states)]
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
 
-# Initialise session_state for persistent location selections
+# Use session_state to maintain selections across reruns
 if "selected_locations" not in st.session_state:
     st.session_state.selected_locations = all_locations.copy()
 
-# Keep only locations that still exist under the current state selection
+# Ensure selections stay valid when state filter reduces available locations
 st.session_state.selected_locations = [
     loc for loc in st.session_state.selected_locations if loc in all_locations
 ]
 
 select_all_locations = st.sidebar.checkbox("Select All Locations", value=True)
 
-# Search box to find locations and add them
-location_search = st.sidebar.text_input("Search locations")
-
-if location_search:
-    search_results = [
-        loc for loc in all_locations
-        if location_search.lower() in loc.lower()
-    ]
-    add_locations = st.sidebar.multiselect(
-        "Search results – add locations",
-        search_results,
-        key="location_search_multiselect"
-    )
-    # Merge newly selected search results into the persistent list
-    for loc in add_locations:
-        if loc not in st.session_state.selected_locations:
-            st.session_state.selected_locations.append(loc)
-
-# Main multiselect showing all currently selected locations
 if select_all_locations:
     selected_locations = all_locations
     st.session_state.selected_locations = all_locations.copy()
