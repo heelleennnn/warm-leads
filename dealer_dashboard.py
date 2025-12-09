@@ -23,7 +23,7 @@ def load_data():
         "cleaned_digital_dealer.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
-    df = df.rename(columns={"Dealer/Website": "Dealer"})
+    df = df.rename(columns={"Dealer/Website": "Dealer"])
     return df
 
 df = load_data()
@@ -47,8 +47,6 @@ missing = [c for c in required_cols if c not in df.columns]
 if missing:
     st.error(f"Missing required columns: {missing}")
     st.stop()
-
-
 
 # --------------------------------
 # TITLE
@@ -102,45 +100,41 @@ else:
 df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_states)]
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
 
-# Use session_state to maintain selections across reruns
-if "selected_locations" not in st.session_state:
-    st.session_state.selected_locations = all_locations.copy()
-
-# Ensure selections stay valid when state filter reduces available locations
-st.session_state.selected_locations = [
-    loc for loc in st.session_state.selected_locations if loc in all_locations
-]
-
 select_all_locations = st.sidebar.checkbox("Select All Locations", value=True)
 
 if select_all_locations:
+    # All locations selected
     selected_locations = all_locations
-    st.session_state.selected_locations = all_locations.copy()
 else:
+    # Start from EMPTY selection so user positively selects locations
     selected_locations = st.sidebar.multiselect(
         "Select Location(s)",
-        all_locations,
-        default=st.session_state.selected_locations,
+        options=all_locations,
+        default=[],
         key="location_multiselect_main"
     )
-    st.session_state.selected_locations = selected_locations
+
 # ----- Form filter -----
+select_all_forms = True
+selected_forms = None
+
 if "Form" in df.columns:
     forms = sorted(df["Form"].fillna("Unknown").unique())
 
     select_all_forms = st.sidebar.checkbox("Select All Forms", value=True)
 
     if select_all_forms:
+        # All forms selected
         selected_forms = forms
     else:
+        # Start from EMPTY selection so user positively selects forms
         selected_forms = st.sidebar.multiselect(
             "Select Form(s)",
-            forms,
-            default=forms
+            options=forms,
+            default=[]
         )
 else:
     selected_forms = None
-
 
 # --------------------------------
 # APPLY FILTERS
@@ -161,7 +155,8 @@ if not select_all_states:
 if not select_all_locations:
     filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
 
-
+if (selected_forms is not None) and (not select_all_forms):
+    filtered = filtered[filtered["Form"].fillna("Unknown").isin(selected_forms)]
 
 # --------------------------------
 # KPI ROW
