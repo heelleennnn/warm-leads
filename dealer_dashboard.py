@@ -26,10 +26,11 @@ def load_data():
     )
 
     # Rename columns so code is consistent
+    # Keep STATE as-is, since your column is really called STATE
     df = df.rename(
         columns={
-            "Dealer/Website": "Dealer",
-            "STATE": "State"
+            "Dealer/Website": "Dealer"
+            # "STATE": "State"  # <-- removed to avoid mismatch
         }
     )
 
@@ -38,14 +39,14 @@ def load_data():
 df = load_data()
 
 # --- Ensure required columns exist ---
-required_cols = ["Lead_Date", "Week_Start", "Dealer", "State"]
+required_cols = ["Lead_Date", "Week_Start", "Dealer", "STATE"]
 missing = [c for c in required_cols if c not in df.columns]
 
 if missing:
     st.error(
         f"The following required columns are missing from the data: {missing}\n\n"
         f"Available columns are: {list(df.columns)}\n\n"
-        "Please adjust the rename mapping or your CSV headers so these are present."
+        "Please adjust the CSV headers or this script so they line up."
     )
     st.stop()
 
@@ -104,8 +105,8 @@ else:
     # Show the resolved range for clarity
     st.sidebar.info(f"Showing {date_mode.lower()}:\n{start_date} → {end_date}")
 
-# ----- State filter -----
-states = sorted(df["State"].dropna().unique())
+# ----- State filter (using STATE) -----
+states = sorted(df["STATE"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
@@ -127,10 +128,10 @@ filtered = filtered[
     (filtered["Lead_Date"] <= end_ts)
 ]
 
-# Only filter by State if user actually narrowed states
+# Only filter by STATE if user actually narrowed states
 if not select_all_states:
     if selected_states:
-        filtered = filtered[filtered["State"].isin(selected_states)]
+        filtered = filtered[filtered["STATE"].isin(selected_states)]
     else:
         filtered = filtered.iloc[0:0]
 
@@ -139,7 +140,6 @@ st.caption(f"Rows after filters: {len(filtered)}")
 # --------------------------------
 # KPI ROW
 # --------------------------------
-# Even if empty, show KPIs (they’ll just be zeros)
 if not filtered.empty:
     total_leads = len(filtered)
     # number of days in selected range that actually exist in filtered data
@@ -189,7 +189,6 @@ if not filtered.empty:
     )
     fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
-    # Full-width, first row
     st.plotly_chart(fig_week, use_container_width=True)
 
     # ---------- 2. Leads by Dealer ----------
@@ -213,13 +212,12 @@ if not filtered.empty:
         margin=dict(l=40, r=40, t=60, b=80)
     )
 
-    # Full-width, second row
     st.plotly_chart(fig_dealer, use_container_width=True)
 
-    # ---------- 3. Leads by State ----------
+    # ---------- 3. Leads by State (STATE) ----------
     state_counts = (
         filtered
-        .groupby("State")
+        .groupby("STATE")
         .size()
         .reset_index(name="Leads")
         .sort_values("Leads", ascending=False)
@@ -227,14 +225,13 @@ if not filtered.empty:
 
     fig_state = px.bar(
         state_counts,
-        x="State",
+        x="STATE",
         y="Leads",
         title="Leads by State",
         height=CHART_HEIGHT
     )
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
-    # Full-width, third row
     st.plotly_chart(fig_state, use_container_width=True)
 else:
     st.info("No data available for the selected filters.")
