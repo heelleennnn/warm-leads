@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-CHART_HEIGHT = 450  # all charts same height
+CHART_HEIGHT = 450  # ensure all charts use the same height
 
 # --------------------------------
 # LOAD DATA
@@ -22,33 +22,49 @@ def load_data():
         parse_dates=["Lead_Date", "Week_Start"]
     )
 
-    # Clean column names (strip spaces)
+    # Strip whitespace from column names
     df.columns = df.columns.str.strip()
 
-    # Robustly find and rename STATE and Dealer/Website columns
-    state_cols = [c for c in df.columns if c.strip().upper() == "STATE"]
-    dealer_cols = [c for c in df.columns if c.strip().upper() in ["DEALER/WEBSITE", "DEALER", "WEBSITE"]]
-
-    if state_cols:
-        df = df.rename(columns={state_cols[0]: "State"})
+    # ---- Work out State column safely ----
+    state_col_name = None
+    if "State" in df.columns:
+        state_col_name = "State"
+    elif "STATE" in df.columns:
+        df = df.rename(columns={"STATE": "State"})
+        state_col_name = "State"
     else:
-        raise ValueError(f"No STATE column found. Columns are: {list(df.columns)}")
+        # Try any column whose upper name is STATE
+        for c in df.columns:
+            if c.strip().upper() == "STATE":
+                df = df.rename(columns={c: "State"})
+                state_col_name = "State"
+                break
 
-    if dealer_cols:
-        df = df.rename(columns={dealer_cols[0]: "Dealer"})
+    # ---- Work out Dealer column safely ----
+    dealer_col_name = None
+    if "Dealer" in df.columns:
+        dealer_col_name = "Dealer"
+    elif "Dealer/Website" in df.columns:
+        df = df.rename(columns={"Dealer/Website": "Dealer"})
+        dealer_col_name = "Dealer"
     else:
-        raise ValueError(f"No Dealer/Website column found. Columns are: {list(df.columns)}")
+        for c in df.columns:
+            if c.strip().upper() in ["DEALER/WEBSITE", "DEALER"]:
+                df = df.rename(columns={c: "Dealer"})
+                dealer_col_name = "Dealer"
+                break
 
-    # Basic sanity check that key columns exist
-    for col in ["Lead_Date", "Week_Start", "Week_Label", "State", "Dealer"]:
-        if col not in df.columns:
-            raise ValueError(f"Required column '{col}' not found. Columns are: {list(df.columns)}")
+    # ---- Validate that all required columns exist ----
+    required_cols = ["Lead_Date", "Week_Start", "Week_Label", "State", "Dealer"]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}. Found columns: {list(df.columns)}")
 
     return df
 
 df = load_data()
 
-# Sanity count – when everything is correct this should be 2491
+# Sanity – should be 2491
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -62,20 +78,22 @@ st.title("📊 Digital Dealer Leads Dashboard")
 st.sidebar.header("Filters")
 
 # ----- Week filter -----
-weeks = sorted(pd.Series(df["Week_Label"]).dropna().unique())
+week_series = df["Week_Label"]
+weeks = sorted(week_series.dropna().astype(str).unique())
 select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
 
 if select_all_weeks:
-    selected_weeks = weeks   # we will NOT filter by week later
+    selected_weeks = weeks        # we won't apply week filter
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
 # ----- State filter -----
-states = sorted(pd.Series(df["State"]).dropna().unique())
+state_series = df["State"]
+states = sorted(state_series.dropna().astype(str).unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states  # we will NOT filter by state later
+    selected_states = states      # we won't apply state filter
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
@@ -87,18 +105,18 @@ filtered = df.copy()
 # Only filter by Week_Label if user actually narrowed it down
 if not select_all_weeks:
     if selected_weeks:
-        filtered = filtered[filtered["Week_Label"].isin(selected_weeks)]
+        filtered = filtered[filtered["Week_Label"].astype(str).isin(selected_weeks)]
     else:
-        filtered = filtered.iloc[0:0]
+        filtered = filtered.iloc[0:0]  # user deselected everything
 
 # Only filter by State if user actually narrowed it down
 if not select_all_states:
     if selected_states:
-        filtered = filtered[filtered["State"].isin(selected_states)]
+        filtered = filtered[filtered["State"].astype(str).isin(selected_states)]
     else:
         filtered = filtered.iloc[0:0]
 
-# When both "Select All" are checked this should also be 2491
+# When both "Select All" are checked, this should also be 2491
 st.caption(f"Rows after filters: {len(filtered)}")
 
 # --------------------------------
@@ -136,7 +154,7 @@ if not filtered.empty:
     )
 
     fig_dealer = px.bar(
-        dealer_counts.head(25),
+        dealer_counts.head(25),  # top dealers for readability
         x="Dealer",
         y="Leads",
         title="Leads by Dealer",
