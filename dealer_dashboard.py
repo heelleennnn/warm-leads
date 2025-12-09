@@ -16,7 +16,7 @@ st.set_page_config(
 @st.cache_data
 def load_data():
     df = pd.read_csv(
-        "cleaned_digital_dealer_prepped.csv",
+        "cleaned_digital_dealer_full.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
     return df
