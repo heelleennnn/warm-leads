@@ -42,8 +42,8 @@ if select_all_weeks:
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
-# ----- State filter (uses 'State' column) -----
-states = sorted(df["State"].dropna().unique())
+# ----- State filter (uses 'STATE' column) -----
+states = sorted(df["STATE"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 if select_all_states:
     selected_states = states
@@ -67,7 +67,7 @@ if selected_weeks:
     filtered = filtered[filtered["Week_Label"].isin(selected_weeks)]
 
 if selected_states:
-    filtered = filtered[filtered["State"].isin(selected_states)]
+    filtered = filtered[filtered["STATE"].isin(selected_states)]
 
 if selected_dealers:
     filtered = filtered[filtered["Dealer"].isin(selected_dealers)]
@@ -78,7 +78,7 @@ if selected_dealers:
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Leads", len(filtered))
 col2.metric("Active Dealers", filtered["Dealer"].nunique())
-col3.metric("States", filtered["State"].nunique())
+col3.metric("States", filtered["STATE"].nunique())
 
 st.markdown("---")
 
@@ -115,12 +115,12 @@ if not filtered.empty:
 
     # Leads by State
     state_counts = (
-        filtered.groupby("State").size().reset_index(name="Leads")
+        filtered.groupby("STATE").size().reset_index(name="Leads")
         .sort_values("Leads", ascending=False)
     )
     fig_state = px.bar(
         state_counts,
-        x="State",
+        x="STATE",
         y="Leads",
         title="Leads by State"
     )
