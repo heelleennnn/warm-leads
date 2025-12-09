@@ -11,26 +11,38 @@ st.set_page_config(
 )
 
 # --------------------------------
+# GLOBAL CHART SETTINGS
+# --------------------------------
+CHART_HEIGHT = 450  # all charts same height
+
+# --------------------------------
 # LOAD DATA
 # --------------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv(
         "cleaned_digital_dealer_full.csv",
-        parse_dates=["ParsedDate", "Week_Start"]  # ParsedDate is the real date column
+        parse_dates=["Lead_Date", "Week_Start"]
     )
 
-    # Use ParsedDate as the main Lead_Date field for consistency
-    df["Lead_Date"] = df["ParsedDate"]
-
-    # Clean up junk / legacy columns if present
-    df = df.drop(columns=["Unnamed: 29", "State"], errors="ignore")
+    # Rename columns so code is consistent
+    df = df.rename(
+        columns={
+            "Dealer/Website": "Dealer",
+            "STATE": "State"
+        }
+    )
 
     return df
 
-
 df = load_data()
 
+# Sanity check – should show 2491
+st.caption(f"Total rows in CSV: {len(df)}")
+
+# --------------------------------
+# TITLE
+# --------------------------------
 st.title("📊 Digital Dealer Leads Dashboard")
 
 # --------------------------------
@@ -39,151 +51,123 @@ st.title("📊 Digital Dealer Leads Dashboard")
 st.sidebar.header("Filters")
 
 # ----- Week filter -----
-if "Week_Label" in df.columns:
-    weeks = df["Week_Label"].dropna().unique().tolist()
+# dropna() avoids float/string mix when sorting
+weeks = sorted(df["Week_Label"].dropna().unique())
+select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
 
-    # Sort by the actual date embedded in the label, e.g. "Week of 01/12/2024"
-    try:
-        weeks = sorted(
-            weeks,
-            key=lambda w: pd.to_datetime(
-                str(w).replace("Week of ", ""),
-                dayfirst=True,
-                errors="coerce"
-            )
-        )
-    except Exception:
-        weeks = sorted(weeks)
-
-    select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
-    if select_all_weeks:
-        selected_weeks = weeks
-    else:
-        selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
+if select_all_weeks:
+    selected_weeks = weeks          # we will NOT filter by week later
 else:
-    selected_weeks = None
+    selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
-# ----- State filter (STATE column) -----
-if "STATE" in df.columns:
-    states = sorted(df["STATE"].dropna().unique())
-    select_all_states = st.sidebar.checkbox("Select All States", value=True)
-    if select_all_states:
-        selected_states = states
-    else:
-        selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
-else:
-    selected_states = None
+# ----- State filter -----
+states = sorted(df["State"].dropna().unique())
+select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
-# ----- Dealer filter -----
-if "Dealer" in df.columns:
-    dealers = sorted(df["Dealer"].dropna().unique())
-    select_all_dealers = st.sidebar.checkbox("Select All Dealers", value=True)
-    if select_all_dealers:
-        selected_dealers = dealers
-    else:
-        selected_dealers = st.sidebar.multiselect("Select Dealer(s)", dealers, default=dealers)
+if select_all_states:
+    selected_states = states        # we will NOT filter by state later
 else:
-    selected_dealers = None
+    selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
 # --------------------------------
 # APPLY FILTERS
 # --------------------------------
 filtered = df.copy()
 
-if selected_weeks is not None and len(selected_weeks) > 0:
-    filtered = filtered[filtered["Week_Label"].isin(selected_weeks)]
-
-if selected_states is not None and len(selected_states) > 0:
-    filtered = filtered[filtered["STATE"].isin(selected_states)]
-
-if selected_dealers is not None and len(selected_dealers) > 0:
-    filtered = filtered[filtered["Dealer"].isin(selected_dealers)]
-
-# --------------------------------
-# KPIs
-# --------------------------------
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Leads", len(filtered))
-col2.metric("Active Dealers", filtered["Dealer"].nunique() if "Dealer" in filtered.columns else 0)
-col3.metric("States", filtered["STATE"].nunique() if "STATE" in filtered.columns else 0)
-
-st.markdown("---")
-
-# --------------------------------
-# CHARTS
-# --------------------------------
-if not filtered.empty:
-    # Leads over time (weekly)
-    if "Week_Start" in filtered.columns:
-        weekly = (
-            filtered.groupby("Week_Start")
-            .size()
-            .reset_index(name="Leads")
-            .sort_values("Week_Start")
-        )
-
-        if not weekly.empty:
-            fig_week = px.line(
-                weekly,
-                x="Week_Start",
-                y="Leads",
-                markers=True,
-                title="Leads Over Time (Weekly)"
-            )
-            st.plotly_chart(fig_week, use_container_width=True)
-
-    # Leads by Dealer
-    if "Dealer" in filtered.columns:
-        dealer_counts = (
-            filtered.groupby("Dealer")
-            .size()
-            .reset_index(name="Leads")
-            .sort_values("Leads", ascending=False)
-        )
-
-        if not dealer_counts.empty:
-            fig_dealer = px.bar(
-                dealer_counts,
-                x="Dealer",
-                y="Leads",
-                title="Leads by Dealer"
-            )
-            st.plotly_chart(fig_dealer, use_container_width=True)
-
-    # Leads by State
-    if "STATE" in filtered.columns:
-        state_counts = (
-            filtered.groupby("STATE")
-            .size()
-            .reset_index(name="Leads")
-            .sort_values("Leads", ascending=False)
-        )
-
-        if not state_counts.empty:
-            fig_state = px.bar(
-                state_counts,
-                x="STATE",
-                y="Leads",
-                title="Leads by State"
-            )
-            st.plotly_chart(fig_state, use_container_width=True)
-else:
-    st.warning("No data for the selected filters.")
-
-# --------------------------------
-# DETAIL TABLE
-# --------------------------------
-st.subheader("Filtered Lead Records")
-if not filtered.empty:
-    # Sort most recent first using Lead_Date (which is ParsedDate)
-    if "Lead_Date" in filtered.columns:
-        filtered_display = filtered.sort_values("Lead_Date", ascending=False)
+# Only filter by Week_Label if user actually narrowed weeks
+if not select_all_weeks:
+    if selected_weeks:
+        filtered = filtered[filtered["Week_Label"].isin(selected_weeks)]
     else:
-        filtered_display = filtered
+        # user deselected all weeks → empty
+        filtered = filtered.iloc[0:0]
 
+# Only filter by State if user actually narrowed states
+if not select_all_states:
+    if selected_states:
+        filtered = filtered[filtered["State"].isin(selected_states)]
+    else:
+        filtered = filtered.iloc[0:0]
+
+# Should be 2491 when both "Select All" are checked
+st.caption(f"Rows after filters: {len(filtered)}")
+
+# --------------------------------
+# MAIN CONTENT
+# --------------------------------
+if not filtered.empty:
+    # ---------- 1. Leads Over Time (Weekly) ----------
+    weekly_counts = (
+        filtered
+        .groupby("Week_Start")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Week_Start")
+    )
+
+    fig_week = px.line(
+        weekly_counts,
+        x="Week_Start",
+        y="Leads",
+        markers=True,
+        title="Leads Over Time (Weekly)",
+        height=CHART_HEIGHT
+    )
+    fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
+
+    # Full-width, first row
+    st.plotly_chart(fig_week, use_container_width=True)
+
+    # ---------- 2. Leads by Dealer ----------
+    dealer_counts = (
+        filtered
+        .groupby("Dealer")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
+
+    fig_dealer = px.bar(
+        dealer_counts.head(25),  # top 25 dealers for readability
+        x="Dealer",
+        y="Leads",
+        title="Leads by Dealer",
+        height=CHART_HEIGHT
+    )
+    fig_dealer.update_layout(
+        xaxis_tickangle=-45,
+        margin=dict(l=40, r=40, t=60, b=80)
+    )
+
+    # Full-width, second row
+    st.plotly_chart(fig_dealer, use_container_width=True)
+
+    # ---------- 3. Leads by State ----------
+    state_counts = (
+        filtered
+        .groupby("State")
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
+
+    fig_state = px.bar(
+        state_counts,
+        x="State",
+        y="Leads",
+        title="Leads by State",
+        height=CHART_HEIGHT
+    )
+    fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
+
+    # Full-width, third row
+    st.plotly_chart(fig_state, use_container_width=True)
+
+    # ---------- Raw Data Table ----------
+    st.subheader("Filtered Leads")
     st.dataframe(
-        filtered_display,
+        filtered.sort_values("Lead_Date", ascending=False),
         use_container_width=True
     )
 else:
-    st.write("No rows match the current filters.")
+    st.warning("No data for the selected filters.")
