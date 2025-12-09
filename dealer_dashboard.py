@@ -18,7 +18,6 @@ CHART_HEIGHT = 450  # all charts same height
 # --------------------------------
 # LOAD DATA
 # --------------------------------
-# @st.cache_data   # comment this out while debugging
 def load_data():
     df = pd.read_csv(
         "cleaned_digital_dealer_full.csv",
@@ -29,31 +28,26 @@ def load_data():
 
 df = load_data()
 
-# Clean up Location text (strip spaces, normalise case, etc.)
+# Clean up Location text
 if "Location" in df.columns:
     df["Location_clean"] = (
         df["Location"]
         .astype(str)
         .str.strip()
-        .str.replace(r"\s+", " ", regex=True)  # collapse multiple spaces
-        .str.title()                            # "sydney cbd" -> "Sydney Cbd"
+        .str.replace(r"\s+", " ", regex=True)
+        .str.title()
     )
 else:
     df["Location_clean"] = ""
 
-# --- Ensure required columns exist ---
+# Required columns
 required_cols = ["Lead_Date", "Week_Start", "Dealer", "STATE", "Location_clean"]
 missing = [c for c in required_cols if c not in df.columns]
 
 if missing:
-    st.error(
-        f"The following required columns are missing from the data: {missing}\n\n"
-        f"Available columns are: {list(df.columns)}\n\n"
-        "Please adjust the CSV headers or this script so they line up."
-    )
+    st.error(f"Missing required columns: {missing}")
     st.stop()
 
-# Sanity check – should show expected row count if full dataset
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -66,7 +60,7 @@ st.title("📊 Digital Dealer Leads Dashboard")
 # --------------------------------
 st.sidebar.header("Filters")
 
-# ----- Date range filter with presets -----
+# ----- Date range filter -----
 min_date = df["Lead_Date"].min().date()
 max_date = df["Lead_Date"].max().date()
 
@@ -77,54 +71,35 @@ date_mode = st.sidebar.radio(
 )
 
 if date_mode == "Custom range":
-    # Show calendar input
     date_range = st.sidebar.date_input(
         "Select date range",
         value=(min_date, max_date)
     )
-
-    # Ensure we always have a start & end date
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_date, end_date = date_range
     else:
         start_date = date_range
         end_date = date_range
 else:
-    # Preset modes use max_date as the "end"
-    if date_mode == "Last 7 days":
-        days = 7
-    elif date_mode == "Last 30 days":
-        days = 30
-    else:  # "Last 90 days"
-        days = 90
-
-    # Calculate start date but don't go earlier than min_date
+    days_lookup = {"Last 7 days": 7, "Last 30 days": 30, "Last 90 days": 90}
+    days = days_lookup[date_mode]
     start_date = max_date - pd.Timedelta(days=days - 1)
     if start_date < min_date:
         start_date = min_date
-
     end_date = max_date
+    st.sidebar.info(f"{start_date} → {end_date}")
 
-    # Show the resolved range for clarity
-    st.sidebar.info(f"Showing {date_mode.lower()}:\n{start_date} → {end_date}")
-
-# ----- State filter (using STATE) -----
+# ----- State filter -----
 states = sorted(df["STATE"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states        # we will NOT filter by state later
+    selected_states = states
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
-# This temp df is only to generate the list of locations based on selected states
-if select_all_states:
-    df_for_locations = df
-else:
-    df_for_locations = df[df["STATE"].isin(selected_states)]
-
-# ----- Location filter (using Location_clean) -----
-# NOTE: multiselect has built-in search, so we don't need a separate text_input.
+# ----- Location filter -----
+df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_states)]
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
 
 select_all_locations = st.sidebar.checkbox(
@@ -132,7 +107,7 @@ select_all_locations = st.sidebar.checkbox(
 )
 
 if select_all_locations:
-    selected_locations = all_locations  # we will NOT filter by location later
+    selected_locations = all_locations
 else:
     selected_locations = st.sidebar.multiselect(
         "Select Location(s)",
@@ -146,7 +121,6 @@ else:
 # --------------------------------
 filtered = df.copy()
 
-# Filter by Lead_Date using selected/preset range
 start_ts = pd.to_datetime(start_date)
 end_ts = pd.to_datetime(end_date)
 
@@ -155,19 +129,11 @@ filtered = filtered[
     (filtered["Lead_Date"] <= end_ts)
 ]
 
-# Only filter by STATE if user actually narrowed states
 if not select_all_states:
-    if selected_states:
-        filtered = filtered[filtered["STATE"].isin(selected_states)]
-    else:
-        filtered = filtered.iloc[0:0]
+    filtered = filtered[filtered["STATE"].isin(selected_states)]
 
-# Only filter by Location_clean if user actually narrowed locations
 if not select_all_locations:
-    if selected_locations:
-        filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
-    else:
-        filtered = filtered.iloc[0:0]
+    filtered = filtered[filtered["Location_clean"].isin(selected_locations)]
 
 st.caption(f"Rows after filters: {len(filtered)}")
 
@@ -176,27 +142,20 @@ st.caption(f"Rows after filters: {len(filtered)}")
 # --------------------------------
 if not filtered.empty:
     total_leads = len(filtered)
-    # number of days in selected range that actually exist in filtered data
     date_span_days = (
-        filtered["Lead_Date"].max().date() - filtered["Lead_Date"].min().date()
+        filtered["Lead_Date"].max().date()
+        - filtered["Lead_Date"].min().date()
     ).days + 1
     avg_leads_per_day = total_leads / date_span_days if date_span_days > 0 else 0
     num_dealers = filtered["Dealer"].nunique()
 else:
-    total_leads = 0
-    avg_leads_per_day = 0
-    num_dealers = 0
+    total_leads = avg_leads_per_day = num_dealers = 0
 
-kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+kpi1, kpi2, kpi3 = st.columns(3)
 
-with kpi_col1:
-    st.metric("Total Leads", f"{total_leads:,}")
-
-with kpi_col2:
-    st.metric("Avg Leads per Day", f"{avg_leads_per_day:.1f}")
-
-with kpi_col3:
-    st.metric("Number of Dealers", f"{num_dealers:,}")
+kpi1.metric("Total Leads", f"{total_leads:,}")
+kpi2.metric("Avg Leads per Day", f"{avg_leads_per_day:.1f}")
+kpi3.metric("Number of Dealers", f"{num_dealers:,}")
 
 st.markdown("---")
 
@@ -204,11 +163,11 @@ st.markdown("---")
 # MAIN CONTENT
 # --------------------------------
 if not filtered.empty:
-    # ---------- 1. Leads Over Time (Weekly) ----------
+
+    # ---------- 1. Weekly Leads Line Chart ----------
     weekly_counts = (
         filtered
-        .groupby("Week_Start")
-        .size()
+        .groupby("Week_Start").size()
         .reset_index(name="Leads")
         .sort_values("Week_Start")
     )
@@ -221,67 +180,59 @@ if not filtered.empty:
         title="Leads Over Time (Weekly)",
         height=CHART_HEIGHT
     )
-    # Navy blue
-    fig_week.update_traces(line_color="#003f5c", marker_color="#003f5c")
+    fig_week.update_traces(line_color="#324AB2", marker_color="#324AB2")
     fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
-
     st.plotly_chart(fig_week, use_container_width=True)
 
-    # ---------- 2. Individual Dealer (top 15 dealers) ----------
+    # ---------- 2. Individual Dealer ----------
     dealer_counts = (
         filtered
-        .groupby("Dealer")
-        .size()
+        .groupby("Dealer").size()
         .reset_index(name="Leads")
         .sort_values("Leads", ascending=False)
     )
 
     fig_dealer = px.bar(
-        dealer_counts.head(15),  # top 15 dealers
+        dealer_counts.head(15),
         x="Dealer",
         y="Leads",
         title="Individual Dealer",
         height=CHART_HEIGHT
     )
-    # Light blue
-    fig_dealer.update_traces(marker_color="#7ab8ff")
+    fig_dealer.update_traces(marker_color="#0073CF")
     fig_dealer.update_layout(
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
-
     st.plotly_chart(fig_dealer, use_container_width=True)
 
-    # ---------- 3. Specific Locations (by Location_clean) ----------
+    # ---------- 3. Specific Locations ----------
     location_counts = (
         filtered
-        .groupby("Location_clean")
-        .size()
+        .groupby("Location_clean").size()
         .reset_index(name="Leads")
         .sort_values("Leads", ascending=False)
     )
 
     fig_location = px.bar(
-        location_counts.head(25),  # show top 25 locations for readability
+        location_counts.head(25),
         x="Location_clean",
         y="Leads",
         title="Specific Locations",
         height=CHART_HEIGHT
     )
-    # Medium blue
-    fig_location.update_traces(marker_color="#2f76c6")
+    fig_location.update_traces(marker_color="#3E8EDE")
     fig_location.update_layout(
+        xaxis_title="Specific Dealers",
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
-
     st.plotly_chart(fig_location, use_container_width=True)
 
-    # ---------- 4. Leads by State (STATE) ----------
+    # ---------- 4. Leads by State ----------
     state_counts = (
         filtered
-        .groupby("STATE")
-        .size()
+        .groupby("STATE").size()
         .reset_index(name="Leads")
         .sort_values("Leads", ascending=False)
     )
@@ -293,10 +244,9 @@ if not filtered.empty:
         title="Leads by State",
         height=CHART_HEIGHT
     )
-    # Sky blue
     fig_state.update_traces(marker_color="#76c7ff")
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
-
     st.plotly_chart(fig_state, use_container_width=True)
+
 else:
-    st.info("No data available for the selected filters.")
+    st.info("No data available for selected filters.")
