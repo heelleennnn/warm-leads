@@ -37,7 +37,19 @@ def load_data():
 
 df = load_data()
 
-# Sanity check – should show 2491
+# --- Ensure required columns exist ---
+required_cols = ["Lead_Date", "Week_Start", "Dealer", "State"]
+missing = [c for c in required_cols if c not in df.columns]
+
+if missing:
+    st.error(
+        f"The following required columns are missing from the data: {missing}\n\n"
+        f"Available columns are: {list(df.columns)}\n\n"
+        "Please adjust the rename mapping or your CSV headers so these are present."
+    )
+    st.stop()
+
+# Sanity check – should show 2491 if full dataset
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -130,8 +142,10 @@ st.caption(f"Rows after filters: {len(filtered)}")
 # Even if empty, show KPIs (they’ll just be zeros)
 if not filtered.empty:
     total_leads = len(filtered)
-    # number of days in selected range that actually exist in data
-    date_span_days = (filtered["Lead_Date"].max().date() - filtered["Lead_Date"].min().date()).days + 1
+    # number of days in selected range that actually exist in filtered data
+    date_span_days = (
+        filtered["Lead_Date"].max().date() - filtered["Lead_Date"].min().date()
+    ).days + 1
     avg_leads_per_day = total_leads / date_span_days if date_span_days > 0 else 0
     num_dealers = filtered["Dealer"].nunique()
 else:
