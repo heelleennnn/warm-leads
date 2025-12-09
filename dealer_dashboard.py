@@ -234,7 +234,7 @@ if not filtered.empty:
 
     st.plotly_chart(fig_week, use_container_width=True)
 
-    # ---------- 2. Individual Dealer (bar chart of dealers) ----------
+    # ---------- 2. Individual Dealer (overall, top 15) ----------
     dealer_counts = (
         filtered
         .groupby("Dealer")
@@ -259,7 +259,34 @@ if not filtered.empty:
 
     st.plotly_chart(fig_dealer, use_container_width=True)
 
-    # ---------- 3. Leads by State (STATE) ----------
+    # ---------- 3. Individual Dealer by Location ----------
+    # Use Location_clean to create another view of individual dealers
+    dealer_location_counts = (
+        filtered
+        .groupby(["Location_clean", "Dealer"])
+        .size()
+        .reset_index(name="Leads")
+        .sort_values("Leads", ascending=False)
+    )
+
+    # Limit to top N dealer-location combos for readability
+    fig_dealer_loc = px.bar(
+        dealer_location_counts.head(50),
+        x="Dealer",
+        y="Leads",
+        color="Location_clean",
+        title="Individual Dealer by Location",
+        height=CHART_HEIGHT
+    )
+    fig_dealer_loc.update_layout(
+        xaxis_tickangle=-45,
+        margin=dict(l=40, r=40, t=60, b=80),
+        legend_title_text="Location"
+    )
+
+    st.plotly_chart(fig_dealer_loc, use_container_width=True)
+
+    # ---------- 4. Leads by State (STATE) ----------
     state_counts = (
         filtered
         .groupby("STATE")
