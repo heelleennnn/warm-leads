@@ -27,16 +27,31 @@ def load_data():
     return df
 
 df = load_data()
+
+# --------------------------------
+# CLEAN LOCATION
+# --------------------------------
+if "Location" in df.columns:
+    df["Location_clean"] = (
+        df["Location"]
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.title()
+    )
 else:
     df["Location_clean"] = ""
 
-# Required columns
+# --------------------------------
+# REQUIRED COLUMNS CHECK
+# --------------------------------
 required_cols = ["Lead_Date", "Week_Start", "Dealer", "STATE", "Location_clean"]
 missing = [c for c in required_cols if c not in df.columns]
 
 if missing:
     st.error(f"Missing required columns: {missing}")
     st.stop()
+
 # --------------------------------
 # TITLE
 # --------------------------------
@@ -83,7 +98,11 @@ select_all_states = st.sidebar.checkbox("Select All States", value=True)
 if select_all_states:
     selected_states = states
 else:
-    selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
+    selected_states = st.sidebar.multiselect(
+        "Select State(s)",
+        states,
+        default=states
+    )
 
 # ----- Location filter -----
 df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_states)]
