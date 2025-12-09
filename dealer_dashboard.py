@@ -196,7 +196,7 @@ if not filtered.empty:
         dealer_counts.head(15),
         x="Dealer",
         y="Leads",
-        title="Individual Dealer",
+        title="Leads by Website",
         height=CHART_HEIGHT
     )
     fig_dealer.update_traces(marker_color="#0073CF")
@@ -218,7 +218,7 @@ if not filtered.empty:
         location_counts.head(25),
         x="Location_clean",
         y="Leads",
-        title="Specific Locations",
+        title="Leads by Individual Dealer",
         height=CHART_HEIGHT
     )
     fig_location.update_traces(marker_color="#3E8EDE")
@@ -246,6 +246,10 @@ if not filtered.empty:
     )
     fig_state.update_traces(marker_color="#76c7ff")
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
+        xaxis_title="Specific Dealers",
+        xaxis_tickangle=-45,
+        margin=dict(l=40, r=40, t=60, b=80)
+    )
     st.plotly_chart(fig_state, use_container_width=True)
 
 else:
