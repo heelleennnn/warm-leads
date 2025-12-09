@@ -10,9 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# --------------------------------
-# GLOBAL CHART SETTINGS
-# --------------------------------
 CHART_HEIGHT = 450  # all charts same height
 
 # --------------------------------
@@ -25,19 +22,33 @@ def load_data():
         parse_dates=["Lead_Date", "Week_Start"]
     )
 
-    # Rename columns so code is consistent
-    df = df.rename(
-        columns={
-            "Dealer/Website": "Dealer",
-            "STATE": "State"
-        }
-    )
+    # Clean column names (strip spaces)
+    df.columns = df.columns.str.strip()
+
+    # Robustly find and rename STATE and Dealer/Website columns
+    state_cols = [c for c in df.columns if c.strip().upper() == "STATE"]
+    dealer_cols = [c for c in df.columns if c.strip().upper() in ["DEALER/WEBSITE", "DEALER", "WEBSITE"]]
+
+    if state_cols:
+        df = df.rename(columns={state_cols[0]: "State"})
+    else:
+        raise ValueError(f"No STATE column found. Columns are: {list(df.columns)}")
+
+    if dealer_cols:
+        df = df.rename(columns={dealer_cols[0]: "Dealer"})
+    else:
+        raise ValueError(f"No Dealer/Website column found. Columns are: {list(df.columns)}")
+
+    # Basic sanity check that key columns exist
+    for col in ["Lead_Date", "Week_Start", "Week_Label", "State", "Dealer"]:
+        if col not in df.columns:
+            raise ValueError(f"Required column '{col}' not found. Columns are: {list(df.columns)}")
 
     return df
 
 df = load_data()
 
-# Sanity check – should show 2491
+# Sanity count – when everything is correct this should be 2491
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -51,21 +62,20 @@ st.title("📊 Digital Dealer Leads Dashboard")
 st.sidebar.header("Filters")
 
 # ----- Week filter -----
-# dropna() avoids float/string mix when sorting
-weeks = sorted(df["Week_Label"].dropna().unique())
+weeks = sorted(pd.Series(df["Week_Label"]).dropna().unique())
 select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
 
 if select_all_weeks:
-    selected_weeks = weeks          # we will NOT filter by week later
+    selected_weeks = weeks   # we will NOT filter by week later
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
 # ----- State filter -----
-states = sorted(df["State"].dropna().unique())
+states = sorted(pd.Series(df["State"]).dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states        # we will NOT filter by state later
+    selected_states = states  # we will NOT filter by state later
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
@@ -74,22 +84,21 @@ else:
 # --------------------------------
 filtered = df.copy()
 
-# Only filter by Week_Label if user actually narrowed weeks
+# Only filter by Week_Label if user actually narrowed it down
 if not select_all_weeks:
     if selected_weeks:
         filtered = filtered[filtered["Week_Label"].isin(selected_weeks)]
     else:
-        # user deselected all weeks → empty
         filtered = filtered.iloc[0:0]
 
-# Only filter by State if user actually narrowed states
+# Only filter by State if user actually narrowed it down
 if not select_all_states:
     if selected_states:
         filtered = filtered[filtered["State"].isin(selected_states)]
     else:
         filtered = filtered.iloc[0:0]
 
-# Should be 2491 when both "Select All" are checked
+# When both "Select All" are checked this should also be 2491
 st.caption(f"Rows after filters: {len(filtered)}")
 
 # --------------------------------
@@ -115,7 +124,6 @@ if not filtered.empty:
     )
     fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
-    # Full-width, first row
     st.plotly_chart(fig_week, use_container_width=True)
 
     # ---------- 2. Leads by Dealer ----------
@@ -128,7 +136,7 @@ if not filtered.empty:
     )
 
     fig_dealer = px.bar(
-        dealer_counts.head(25),  # top 25 dealers for readability
+        dealer_counts.head(25),
         x="Dealer",
         y="Leads",
         title="Leads by Dealer",
@@ -139,7 +147,6 @@ if not filtered.empty:
         margin=dict(l=40, r=40, t=60, b=80)
     )
 
-    # Full-width, second row
     st.plotly_chart(fig_dealer, use_container_width=True)
 
     # ---------- 3. Leads by State ----------
@@ -160,7 +167,6 @@ if not filtered.empty:
     )
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
-    # Full-width, third row
     st.plotly_chart(fig_state, use_container_width=True)
 
     # ---------- Raw Data Table ----------
