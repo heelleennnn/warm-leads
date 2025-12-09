@@ -19,6 +19,10 @@ def load_data():
         "cleaned_digital_dealer_full.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
+
+    # Drop junk / legacy columns if present
+    df = df.drop(columns=["Unnamed: 29", "State", "ParsedDate"], errors="ignore")
+
     return df
 
 df = load_data()
@@ -26,7 +30,7 @@ df = load_data()
 st.title("📊 Digital Dealer Leads Dashboard")
 
 # --------------------------------
-# SIDEBAR FILTERS (with Select All + auto-hide)
+# SIDEBAR FILTERS
 # --------------------------------
 st.sidebar.header("Filters")
 
@@ -42,7 +46,7 @@ if select_all_weeks:
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
-# ----- State filter (uses 'STATE' column) -----
+# ----- State filter (STATE column) -----
 states = sorted(df["STATE"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 if select_all_states:
@@ -98,7 +102,7 @@ if not filtered.empty:
         markers=True,
         title="Leads Over Time (Weekly)"
     )
-    st.plotly_chart(fig_week, width="stretch")
+    st.plotly_chart(fig_week, use_container_width=True)
 
     # Leads by Dealer
     dealer_counts = (
@@ -111,7 +115,7 @@ if not filtered.empty:
         y="Leads",
         title="Leads by Dealer"
     )
-    st.plotly_chart(fig_dealer, width="stretch")
+    st.plotly_chart(fig_dealer, use_container_width=True)
 
     # Leads by State
     state_counts = (
@@ -124,7 +128,7 @@ if not filtered.empty:
         y="Leads",
         title="Leads by State"
     )
-    st.plotly_chart(fig_state, width="stretch")
+    st.plotly_chart(fig_state, use_container_width=True)
 else:
     st.warning("No data for the selected filters.")
 
@@ -135,7 +139,7 @@ st.subheader("Filtered Lead Records")
 if not filtered.empty:
     st.dataframe(
         filtered.sort_values("Lead_Date", ascending=False),
-        width="stretch"
+        use_container_width=True
     )
 else:
     st.write("No rows match the current filters.")
