@@ -103,7 +103,7 @@ df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_sta
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
 
 select_all_locations = st.sidebar.checkbox(
-    "Select All Locations (after state filter)", value=True
+    "Select All Locations", value=True
 )
 
 if select_all_locations:
