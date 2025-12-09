@@ -10,7 +10,10 @@ st.set_page_config(
     layout="wide"
 )
 
-CHART_HEIGHT = 450  
+# --------------------------------
+# GLOBAL CHART SETTINGS
+# --------------------------------
+CHART_HEIGHT = 450  # all charts same height
 
 # --------------------------------
 # LOAD DATA
@@ -22,49 +25,19 @@ def load_data():
         parse_dates=["Lead_Date", "Week_Start"]
     )
 
-    # Strip whitespace from column names
-    df.columns = df.columns.str.strip()
-
-    # ---- Work out State column safely ----
-    state_col_name = None
-    if "State" in df.columns:
-        state_col_name = "State"
-    elif "STATE" in df.columns:
-        df = df.rename(columns={"STATE": "State"})
-        state_col_name = "State"
-    else:
-        # Try any column whose upper name is STATE
-        for c in df.columns:
-            if c.strip().upper() == "STATE":
-                df = df.rename(columns={c: "State"})
-                state_col_name = "State"
-                break
-
-    # ---- Work out Dealer column safely ----
-    dealer_col_name = None
-    if "Dealer" in df.columns:
-        dealer_col_name = "Dealer"
-    elif "Dealer/Website" in df.columns:
-        df = df.rename(columns={"Dealer/Website": "Dealer"})
-        dealer_col_name = "Dealer"
-    else:
-        for c in df.columns:
-            if c.strip().upper() in ["DEALER/WEBSITE", "DEALER"]:
-                df = df.rename(columns={c: "Dealer"})
-                dealer_col_name = "Dealer"
-                break
-
-    # ---- Validate that all required columns exist ----
-    required_cols = ["Lead_Date", "Week_Start", "Week_Label", "State", "Dealer"]
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}. Found columns: {list(df.columns)}")
+    # Rename columns so code is consistent
+    df = df.rename(
+        columns={
+            "Dealer/Website": "Dealer",
+            "STATE": "State"
+        }
+    )
 
     return df
 
 df = load_data()
 
-# Sanity – should be 2491
+# Sanity check – should show 2491
 st.caption(f"Total rows in CSV: {len(df)}")
 
 # --------------------------------
@@ -77,23 +50,54 @@ st.title("📊 Digital Dealer Leads Dashboard")
 # --------------------------------
 st.sidebar.header("Filters")
 
-# ----- Week filter -----
-week_series = df["Week_Label"]
-weeks = sorted(week_series.dropna().astype(str).unique())
-select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
+# ----- Date range filter with presets -----
+min_date = df["Lead_Date"].min().date()
+max_date = df["Lead_Date"].max().date()
 
-if select_all_weeks:
-    selected_weeks = weeks
+date_mode = st.sidebar.radio(
+    "Date range",
+    ["Custom range", "Last 7 days", "Last 30 days", "Last 90 days"],
+    index=0
+)
+
+if date_mode == "Custom range":
+    # Show calendar input
+    date_range = st.sidebar.date_input(
+        "Select date range",
+        value=(min_date, max_date)
+    )
+
+    # Ensure we always have a start & end date
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date = date_range
+        end_date = date_range
 else:
-    selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
+    # Preset modes use max_date as the "end"
+    if date_mode == "Last 7 days":
+        days = 7
+    elif date_mode == "Last 30 days":
+        days = 30
+    else:  # "Last 90 days"
+        days = 90
+
+    # Calculate start date but don't go earlier than min_date
+    start_date = max_date - pd.Timedelta(days=days - 1)
+    if start_date < min_date:
+        start_date = min_date
+
+    end_date = max_date
+
+    # Show the resolved range for clarity
+    st.sidebar.info(f"Showing {date_mode.lower()}:\n{start_date} → {end_date}")
 
 # ----- State filter -----
-state_series = df["State"]
-states = sorted(state_series.dropna().astype(str).unique())
+states = sorted(df["State"].dropna().unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states     
+    selected_states = states        # we will NOT filter by state later
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
@@ -102,22 +106,51 @@ else:
 # --------------------------------
 filtered = df.copy()
 
-# Only filter by Week_Label if user actually narrowed it down
-if not select_all_weeks:
-    if selected_weeks:
-        filtered = filtered[filtered["Week_Label"].astype(str).isin(selected_weeks)]
-    else:
-        filtered = filtered.iloc[0:0]  
+# Filter by Lead_Date using selected/preset range
+start_ts = pd.to_datetime(start_date)
+end_ts = pd.to_datetime(end_date)
 
-# Only filter by State if user actually narrowed it down
+filtered = filtered[
+    (filtered["Lead_Date"] >= start_ts) &
+    (filtered["Lead_Date"] <= end_ts)
+]
+
+# Only filter by State if user actually narrowed states
 if not select_all_states:
     if selected_states:
-        filtered = filtered[filtered["State"].astype(str).isin(selected_states)]
+        filtered = filtered[filtered["State"].isin(selected_states)]
     else:
         filtered = filtered.iloc[0:0]
 
-# When both "Select All" are checked, this should also be 2491
 st.caption(f"Rows after filters: {len(filtered)}")
+
+# --------------------------------
+# KPI ROW
+# --------------------------------
+# Even if empty, show KPIs (they’ll just be zeros)
+if not filtered.empty:
+    total_leads = len(filtered)
+    # number of days in selected range that actually exist in data
+    date_span_days = (filtered["Lead_Date"].max().date() - filtered["Lead_Date"].min().date()).days + 1
+    avg_leads_per_day = total_leads / date_span_days if date_span_days > 0 else 0
+    num_dealers = filtered["Dealer"].nunique()
+else:
+    total_leads = 0
+    avg_leads_per_day = 0
+    num_dealers = 0
+
+kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+
+with kpi_col1:
+    st.metric("Total Leads", f"{total_leads:,}")
+
+with kpi_col2:
+    st.metric("Avg Leads per Day", f"{avg_leads_per_day:.1f}")
+
+with kpi_col3:
+    st.metric("Number of Dealers", f"{num_dealers:,}")
+
+st.markdown("---")
 
 # --------------------------------
 # MAIN CONTENT
@@ -142,6 +175,7 @@ if not filtered.empty:
     )
     fig_week.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
+    # Full-width, first row
     st.plotly_chart(fig_week, use_container_width=True)
 
     # ---------- 2. Leads by Dealer ----------
@@ -154,7 +188,7 @@ if not filtered.empty:
     )
 
     fig_dealer = px.bar(
-        dealer_counts.head(25),  # top dealers for readability
+        dealer_counts.head(25),  # top 25 dealers for readability
         x="Dealer",
         y="Leads",
         title="Leads by Dealer",
@@ -165,6 +199,7 @@ if not filtered.empty:
         margin=dict(l=40, r=40, t=60, b=80)
     )
 
+    # Full-width, second row
     st.plotly_chart(fig_dealer, use_container_width=True)
 
     # ---------- 3. Leads by State ----------
@@ -185,6 +220,7 @@ if not filtered.empty:
     )
     fig_state.update_layout(margin=dict(l=40, r=40, t=60, b=40))
 
+    # Full-width, third row
     st.plotly_chart(fig_state, use_container_width=True)
-
-
+else:
+    st.info("No data available for the selected filters.")
