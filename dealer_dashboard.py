@@ -182,7 +182,7 @@ if not filtered.empty:
     )
     fig_week.update_traces(line_color="#324AB2", marker_color="#324AB2")
     fig_week.update_layout(
-        xaxis_title="State",
+        xaxis_title="Week",
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
@@ -205,6 +205,7 @@ if not filtered.empty:
     )
     fig_dealer.update_traces(marker_color="#0073CF")
     fig_dealer.update_layout(
+         xaxis_title="Dealer Website",
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
