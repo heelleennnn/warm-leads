@@ -23,20 +23,10 @@ def load_data():
         "cleaned_digital_dealer.csv",
         parse_dates=["Lead_Date", "Week_Start"]
     )
-    df = df.rename(columns={"Dealer/Website": "Dealer"])
+    df = df.rename(columns={"Dealer/Website": "Dealer"})
     return df
 
 df = load_data()
-
-# Clean up Location text
-if "Location" in df.columns:
-    df["Location_clean"] = (
-        df["Location"]
-        .astype(str)
-        .str.strip()
-        .str.replace(r"\s+", " ", regex=True)
-        .str.title()
-    )
 else:
     df["Location_clean"] = ""
 
@@ -47,7 +37,6 @@ missing = [c for c in required_cols if c not in df.columns]
 if missing:
     st.error(f"Missing required columns: {missing}")
     st.stop()
-
 # --------------------------------
 # TITLE
 # --------------------------------
