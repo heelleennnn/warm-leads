@@ -180,34 +180,6 @@ if not select_all_locations:
 
 st.caption(f"Rows after filters: {len(filtered)}")
 
-# ----- Sidebar bar chart: Leads by Location -----
-if not filtered.empty:
-    location_counts_sidebar = (
-        filtered
-        .groupby("Location_clean")
-        .size()
-        .reset_index(name="Leads")
-        .sort_values("Leads", ascending=False)
-    )
-
-    fig_sidebar_loc = px.bar(
-        location_counts_sidebar.head(25),  # top 25 locations for readability
-        x="Location_clean",
-        y="Leads",
-        title="Leads by Location",
-        height=400
-    )
-    # Make bars a lighter shade of blue
-    fig_sidebar_loc.update_traces(marker_color="#8EC6FF")
-    fig_sidebar_loc.update_layout(
-        xaxis_tickangle=-45,
-        margin=dict(l=20, r=20, t=40, b=80)
-    )
-
-    st.sidebar.plotly_chart(fig_sidebar_loc, use_container_width=True)
-else:
-    st.sidebar.info("No data available for the selected filters to show location chart.")
-
 # --------------------------------
 # KPI ROW
 # --------------------------------
@@ -262,7 +234,7 @@ if not filtered.empty:
 
     st.plotly_chart(fig_week, use_container_width=True)
 
-    # ---------- 2. Leads by Dealer ----------
+    # ---------- 2. Individual Dealer (bar chart of dealers) ----------
     dealer_counts = (
         filtered
         .groupby("Dealer")
@@ -272,12 +244,14 @@ if not filtered.empty:
     )
 
     fig_dealer = px.bar(
-        dealer_counts.head(25),  # top 25 dealers for readability
+        dealer_counts.head(15),  # top 15 dealers
         x="Dealer",
         y="Leads",
-        title="Leads by Dealer",
+        title="Individual Dealer",
         height=CHART_HEIGHT
     )
+    # Lighter shade of blue for bars
+    fig_dealer.update_traces(marker_color="#8EC6FF")
     fig_dealer.update_layout(
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
