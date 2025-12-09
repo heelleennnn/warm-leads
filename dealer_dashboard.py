@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-CHART_HEIGHT = 450  # ensure all charts use the same height
+CHART_HEIGHT = 450  
 
 # --------------------------------
 # LOAD DATA
@@ -83,7 +83,7 @@ weeks = sorted(week_series.dropna().astype(str).unique())
 select_all_weeks = st.sidebar.checkbox("Select All Weeks", value=True)
 
 if select_all_weeks:
-    selected_weeks = weeks        # we won't apply week filter
+    selected_weeks = weeks
 else:
     selected_weeks = st.sidebar.multiselect("Select Week(s)", weeks, default=weeks)
 
@@ -93,7 +93,7 @@ states = sorted(state_series.dropna().astype(str).unique())
 select_all_states = st.sidebar.checkbox("Select All States", value=True)
 
 if select_all_states:
-    selected_states = states      # we won't apply state filter
+    selected_states = states     
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
@@ -107,7 +107,7 @@ if not select_all_weeks:
     if selected_weeks:
         filtered = filtered[filtered["Week_Label"].astype(str).isin(selected_weeks)]
     else:
-        filtered = filtered.iloc[0:0]  # user deselected everything
+        filtered = filtered.iloc[0:0]  
 
 # Only filter by State if user actually narrowed it down
 if not select_all_states:
