@@ -98,23 +98,52 @@ if select_all_states:
 else:
     selected_states = st.sidebar.multiselect("Select State(s)", states, default=states)
 
-# ----- Location filter -----
+# ----- Location filter with search + multi-select -----
+# First, restrict available locations by selected states (for usability)
 df_for_locations = df if select_all_states else df[df["STATE"].isin(selected_states)]
 all_locations = sorted(df_for_locations["Location_clean"].dropna().unique())
 
-select_all_locations = st.sidebar.checkbox(
-    "Select All Locations", value=True
-)
+# Initialise session_state for persistent location selections
+if "selected_locations" not in st.session_state:
+    st.session_state.selected_locations = all_locations.copy()
 
+# Keep only locations that still exist under the current state selection
+st.session_state.selected_locations = [
+    loc for loc in st.session_state.selected_locations if loc in all_locations
+]
+
+select_all_locations = st.sidebar.checkbox("Select All Locations", value=True)
+
+# Search box to find locations and add them
+location_search = st.sidebar.text_input("Search locations")
+
+if location_search:
+    search_results = [
+        loc for loc in all_locations
+        if location_search.lower() in loc.lower()
+    ]
+    add_locations = st.sidebar.multiselect(
+        "Search results – add locations",
+        search_results,
+        key="location_search_multiselect"
+    )
+    # Merge newly selected search results into the persistent list
+    for loc in add_locations:
+        if loc not in st.session_state.selected_locations:
+            st.session_state.selected_locations.append(loc)
+
+# Main multiselect showing all currently selected locations
 if select_all_locations:
     selected_locations = all_locations
+    st.session_state.selected_locations = all_locations.copy()
 else:
     selected_locations = st.sidebar.multiselect(
         "Select Location(s)",
         all_locations,
-        default=all_locations,
-        key="location_multiselect"
+        default=st.session_state.selected_locations,
+        key="location_multiselect_main"
     )
+    st.session_state.selected_locations = selected_locations
 
 # --------------------------------
 # APPLY FILTERS
@@ -205,7 +234,7 @@ if not filtered.empty:
     )
     fig_dealer.update_traces(marker_color="#0073CF")
     fig_dealer.update_layout(
-         xaxis_title="Dealer Website",
+        xaxis_title="Dealer Website",
         xaxis_tickangle=-45,
         margin=dict(l=40, r=40, t=60, b=80)
     )
